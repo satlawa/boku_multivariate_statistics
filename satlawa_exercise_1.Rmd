@@ -1,0 +1,176 @@
+---
+author: "Philipp Satlawa - h0640348"
+date: "11/04/2021"
+title: "Multivariate Statistics - Exercise 1"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This document contains the answered questions of exercise 1 of the course "Multivariate Statistics".
+
+***
+
+# Linear regression
+
+## 1.install and load the packages & load and summerize the data
+```{r}
+# install package
+#install.packages("gamair")
+# import necessary libraries
+library(gamair)
+library(leaps)
+# load data
+data(mpg)
+# overview over dataset
+str(mpg)
+# show if attributes are factors
+unlist(lapply(mpg, is.factor))
+# using result of the above calculation to determine the numeric attributes
+# possibility 1:
+sum(!unlist(lapply(mpg, is.factor)))
+# possibility 2:
+length(mpg) - sum(unlist(lapply(mpg, is.factor)))
+# possibility 3:
+sum(unlist(lapply(mpg, is.numeric)))
+```
+The `mpg` dataset consists of 26 attributes and 205 observations as expected.
+16 of all attributes are numeric and 10 are categorical.
+
+
+## 2. Data preperation
+```{r}
+# restrict dataset to certain attributes 
+mpg2 <- mpg[c("hw.mpg", "wb", "length", "width", "height", "weight", "eng.cc",
+                "bore", "stroke", "hp")]
+# remove records with 'NA' values
+mpg2 <- na.omit(mpg2)
+# get number of rows
+nrow(mpg2)
+```
+After removing all records containing `NA`s, the dataset consists of 199 records. 
+
+
+## 3. Convert attribute "fuel efficiency" into the metric system 
+```{r}
+# calculating "lphk" (in liters per 100 kilometer)
+mpg2["lphk"] <- 100 / ((mpg2["hw.mpg"] / 0.621371) * 0.264172)
+# removing "hw.mpg"
+mpg2 <- mpg2[ , ! names(mpg2) %in% c("hw.mpg")]
+```
+
+
+## 4. Plot data
+```{r}
+# scatterplot "weight" vs "lphk"
+plot(mpg2[c("weight","lphk")], col = rgb(0,0.2,1,0.4), pch = 20,
+      main = "weight vs Fuel Consumption",
+      xlab = "Weight [pounds]", ylab = "Fuel Consumption [l/100km]")
+
+# scatterplot "height" vs "lphk"
+plot(mpg2[c("height","lphk")], col = rgb(0,0.2,1,0.4), pch = 20,
+      main = "Heigh vs Fuel Consumption",
+      xlab = "Height [inches]", ylab = "Fuel Consumption [l/100km]")
+```
+The first scatterplot indicates that there is a positive correlation between the variables `lphk` and `weight`, because with the increase of the attribute `weight` the attribute `lphk` also increases. In contrast to the first finding there seems to be no correlation between the attributes `height` and `lphk`. The data points are spread out more or less evenly without a clear correlation.
+
+
+## 5. Linear regression
+```{r}
+# create linear model_weight using "lphk"|"weight"
+model_weight <- lm(lphk ~ weight, data = mpg2)
+summary(model_weight)
+
+# create linear model_height using "lphk"|"height"
+model_height <- lm(lphk ~ height, data = mpg2)
+summary(model_height)
+
+# create linear model_weight_height using "lphk"|("weight", "height")
+model_weight_height <- lm(lphk ~ weight+height, data = mpg2)
+summary(model_weight_height)
+
+```
+Comparing the two bivariate models `model_weight` and `model_weight` we can clearly see the superiority of `model_weight` with R² 0.733 over `model_weight` with R² 0.0172. While comparing `model_weight` with the multivariate model `model_weight_height` we have to use the adjusted R². Therefore `model_weight_height`'s adjusted R² is 0.747 is slightly higher compared to `model_weight`'s adjusted R² 0.732. Hence, I would prefer to use `model_weight_height` due the better performance with the assumption that obtaining the additional variable `height` is not linked with additional costs.
+
+
+## 6. Plot data with regression line
+```{r}
+# scatterplot with regression line of model_weight
+plot(mpg2[c("weight","lphk")], col = rgb(0,0.2,1,0.4), pch = 20,
+      main = "Simple Linear Regression model_weight",
+      xlab = "Weight [pounds]", ylab = "Fuel Consumption [l/100km]")
+abline(model_weight, lwd = 1, col = "red")
+```
+
+
+## 7. Predict data with models
+```{r}
+# predict using model_weight ("lphk"|"weight")
+predict(model_weight, newdata = data.frame(weight = 2750))
+
+# predict using model_weight_heigth ("lphk"|("weight", "height"))
+predict(model_weight_height, newdata = data.frame(weight = 2750, height = 55))
+```
+Predicting the fuel consumption `lphk` with the model `model_weight` for a car with the weight of 2750 pounds results in 8.58 liters per 100 km. While the predicted fuel consumption `lphk` with the model `model_weight_height` (`weight` = 2750) results in 8.48 liters per 100 km.
+
+
+## 8. Create linear regression model with all attributes
+```{r}
+# create linear model using all attributes
+model_all <- lm(lphk ~ ., data = mpg2)
+summary(model_all)
+```
+The `model_all` seems to predict `lphk` much better than the bivariate `model_weight`, achieving an adjusted R² of 0.8096 compared to adjusted R² of 0.7316 respectively. Due to the better performance of `model_all` based on the adjusted R² metric, I would choose `model_all` over `model_weight`.
+The regression coefficients of `model_weight` show that `lphk` is positively correlated with the attributes `wb`, `widthv`, `height`, `weight`, `eng.cc` and negatively correlated with the attributes `hw.mpg`, `length`, `bore`, `stroke`, `hp`.
+
+
+## 9. Search for best variables and create best model
+```{r}
+# calculate best predictor variables for model using n variables
+regss <- regsubsets(lphk ~ ., data = mpg2, nbest = 1, nvmax = 9,
+                      intercept = TRUE, method = "exhaustive")
+# results
+sum_regss <- summary(regss)
+sum_regss$which
+
+# plot BIC versus Model Size
+plot(x = apply(sum_regss$which, 1, sum) - 1,
+      y = sum_regss$bic, pch = 20, type = "o", main = "BIC versus Model Size",
+      xlab = "No. of Predictors", ylab = "Bayes Information Criterion BIC")
+
+# create best model according to "BIC versus Model Size"
+model_best <- lm(lphk ~ weight+eng.cc+stroke+hp, data = mpg2)
+(summary(model_best))
+```
+After computing the BIC versus the number of predictors the optimal number of predictors (minimizing BIC) is 4. The best variables for predicting `lphk` in a linear regression model are `weight`, `eng.cc`, `stroke` and `hp`.
+
+\center _Table 1: Comparison of the calculated linear regression models._ \center
+
+**Regression model** | **adjusted R²** | **n var** |
+-------------------- | --------------- | --------- |
+**model_weight**     |   0.7316        | 1         |
+**model_all**        |   0.8096        | 9         |
+**model_best**       |   0.8049        | 4         |
+
+As shown in Table 1 regression model `model_all` has a slightly higher adj. R² 0.8096 compared to `model_best` with an adj. R² of 0.8049 and both show a better performance than `model_weight`'s adjusted R² of 0.7316. Additionally all variables in `model_best` all predictor variables are significant. Considering that we strive to choose a regression model that is as simple as possible given a good performance, I would choose `model_best` as the model for production. `model_best` performs similarly to `model_all`, despite using 5 predictor variables less.
+Looking at the regression coefficients we can see that `lphk` is  positively correlated with the attributes `weight` `eng.cc` and `hp`, which makes sense since the heavier and more powerful a car the higher the fuel consumption. However fuel consumption `lphk` is negatively correlated with the attribute `stroke`, that implies the higher the number of strokes a car has the less it consumes.
+
+
+## 10. Plot multiple regression model
+```{r}
+# predict values using model_best 
+mpg2["pred"] <- predict(model_best, newdata = +
+                          mpg2[c("weight", "eng.cc", "stroke", "hp")])
+
+# scatterplot true Response Values vs Predicted Values
+plot(mpg2[c("pred","lphk")], col = rgb(0,0.2,1,0.4), pch = 20,
+      main = "True Response Values vs Predicted Values",
+      xlab = "Predicted Fuel Consumption [l/100km]",
+      ylab = "Observed Fuel Consumption [l/100km]")
+abline(a = 0, b = 1, col = "red")
+```
+
+***
