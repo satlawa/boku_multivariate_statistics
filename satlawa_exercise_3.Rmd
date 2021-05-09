@@ -1,0 +1,404 @@
+---
+author: "Philipp Satlawa - h0640348"
+date: "08/05/2021"
+title: "Multivariate Statistics - Exercise 3"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This document contains the answered questions of exercise 3 of the course "Multivariate Statistics".
+
+***
+
+# PCA - principal component analysis
+
+## 1. install and load the packages - load and summerize the data
+```{r}
+# import necessary libraries
+library(grid)
+library(lattice)
+library(modeltools)
+library(stats4)
+library(flexclust)
+
+# load data
+data(milk)
+
+# explore data
+help(milk)
+str(milk)
+summary(milk)
+```
+The dataset `milk` contains 25 records and 5 attributes. The records represent tree species and all attributes are stored as continuous numbers.
+
+
+## 2. means and standard deviations
+```{r}
+# attribute means
+apply(milk, 2, mean)
+
+# attribute standard deviation
+apply(milk, 2, sd)
+```
+Are the variables directly comparabe or should the data be scaled? Can the data matrix directly be used in pca?
+
+
+## 3. PCA
+```{r}
+# PCA with milk data
+pca_milk <- prcomp(x = milk, center = TRUE, scale. = FALSE, retx = TRUE)
+
+# loadings matrix
+pca_milk$rotation
+```
+Give the loadings matrix and interpret it
+
+
+## 4. scores matrix
+```{r}
+# scores matrix
+pca_milk$x
+```
+ Give the score matrix and interpret it. What is the meaning of these values?
+
+
+## 5. summary method
+```{r}
+# scores matrix
+#pca_milk$x
+summary(pca_milk)
+```
+How much variance is explained by the first principal component? How many PCs would you choose?
+
+
+## 6. score plot and a loadings plot
+```{r}
+library(shape)
+# score plot
+plot(pca_milk$x[, 1:2], pch = 19,
+xlab = "PC1", ylab = "PC2", main = "Score Plot")
+# loading plot
+plot(pca_milk$rotation[, 1:2], pch = 19,
+xlab = "PC1", ylab = "PC2", main = "Loading Plot")
+# Arrows (shape package required)
+Arrows(x0 = 0, y0 = 0, x1 = pca_milk$rotation[, 1],
+y1 = pca_milk$rotation[, 2], arr.adj = 1, col = "red")
+# show zero lines
+abline(h = 0, col = "grey")
+abline(v = 0, col = "grey")
+# variable names
+text(pca_milk$rotation[, 1:2], labels = rownames(pca_milk$rotation))
+```
+
+
+## 7. biplot
+```{r}
+# biplot
+biplot(pca_milk, main = "Biplot", cex = c(0.5,1), scale = 0)
+```
+interpret results
+
+
+## 8. cluster data
+```{r}
+# biplot
+#pca_milk$x
+```
+interpret results
+
+
+# PCA for Dimensionality Reduction
+
+## 9. load photo
+```{r}
+# load package
+require(jpeg)
+
+# load photo
+photo <- readJPEG("Uyuni_salt_flat_Bolivia.jpg")
+
+nrow(photo)
+ncol(photo)
+
+# dimensions / resolution
+dim(photo)
+
+# class of object photo
+class(photo)
+
+# create matrices for every channel
+r <- photo[,,1]
+g <- photo[,,2]
+b <- photo[,,3]
+
+# preform PCA on data
+r.pca <- prcomp(r, center = F)
+g.pca <- prcomp(g, center = F)
+b.pca <- prcomp(b, center = F)
+rgb.pca <- list(r.pca, g.pca, b.pca)
+```
+interpret results
+
+
+
+
+***
+
+## 1.install and load the packages - load and summerize the data
+```{r}
+# load dataset "trees" 
+data(trees)
+
+# examine help page
+help(trees)
+
+# scatterplot "Girth" vs "Volume"
+plot(trees[c("Girth","Volume")], col = rgb(0,0.2,1,0.4), pch = 20,
+      main = "Tree diameter vs Volume",
+      xlab = "Tree diameter [inches]", ylab = "Volume [cubic ft]")
+
+# scatterplot "Height" vs "Volume"
+plot(trees[c("Height","Volume")], col = rgb(0,0.2,1,0.4), pch = 20,
+      main = "Heigh vs Volume",
+      xlab = "Height [ft]", ylab = "Volume [cubic ft]")
+```
+In the fist scatterplot there seems to be a positive correlation between the variables `Volume` and `Girth` (Tree diameter). This correlation is almost linear. However, the second scatterplot showing the variables `Volume` and `Height` indicates a very vague positive relationship for the two variables. 
+The correlation between the variables `Volume` and `Girth` have a constant variance (variance of `Volume` is nearly constant independent of the `Girth`) whereas the relationship between `Volume` and `Height` seems to have an increasing variance (variance of `Volume` is increasing with the increase in `Height`).
+That makes sense, since young trees have to grow in height to increase their volume, however depending on how much concurrence they experienced from other trees they might have a small or big tree crown (tree crown diameter and tree diameter have a high positive correlation).
+
+
+## 2. log transformation of the data
+```{r}
+# logarithmic transform 
+trees_log <- log(trees)
+
+# scatterplot "Girth" vs "Volume with Log Transformation"
+plot(trees_log[c("Girth","Volume")], col = rgb(0,0.2,1,0.4), pch = 20,
+      main = "Tree diameter vs Volume with Log Transformation",
+      xlab = "Tree diameter [inches]", ylab = "Volume [cubic ft]")
+
+# scatterplot "Height" vs "Volume with Log Transformation"
+plot(trees_log[c("Height","Volume")], col = rgb(0,0.2,1,0.4), pch = 20,
+      main = "Heigh vs Volume with Log Transformation",
+      xlab = "Height [ft]", ylab = "Volume [cubic ft]")
+```
+After the log transformation the relationship between the attributes `Girth` and `Volume` seems to be clearly linear, as shown in scatterplot "Tree diameter vs Volume with Log Transformation". The second scatterplot shows the positive but noisy correlation between the variables `Volume` and `Height`.
+
+
+## 3. bivariate regression
+```{r}
+# create linear model using "Volume"|"Girth"
+model_girth <- lm(Volume ~ Girth, data = trees)
+summary(model_girth)
+
+# create linear model using "Volume"|"Height"
+model_height <- lm(Volume ~ Height, data = trees)
+summary(model_height)
+
+```
+Comparing the two bivariate linear regression models `model_girth` and `model_height` we can clearly identify the preeminence of `model_girth` with a R² of 0.935 over `model_height` with a R² of 0.358. Hence, Tree diameter is highly correlated with wood volume.
+
+
+## 4. bivariate polynomial regression
+```{r}
+# load dataset
+data(women)
+
+# Visualize the relationship between "height" vs "weight"
+plot(women[c("height","weight")], col = rgb(0,0.2,1,0.4), pch = 20,
+      main = "height vs weight",
+      xlab = "height [inches]", ylab = "weight [cubic ft]")
+
+# compute polynomial regression and visualize the fits
+plot(women[c("height","weight")], col = rgb(0,0.2,1,0.4), pch = 20,
+      main = "polynomial regression",
+      xlab = "height [inches]", ylab = "weight [cubic ft]")
+
+# fit polynomial models up to order 5
+model_weight_2 <- lm(weight ~ poly(height,2), data = women)
+print(summary(model_weight_2))
+lines(women$height, predict(model_weight_2), col=3)
+
+model_weight_3 <- lm(weight ~ poly(height,3), data = women)
+print(summary(model_weight_3))
+lines(women$height, predict(model_weight_3), col=4)
+
+model_weight_4 <- lm(weight ~ poly(height,4), data = women)
+print(summary(model_weight_4))
+lines(women$height, predict(model_weight_4), col=5)
+
+model_weight_5 <- lm(weight ~ poly(height,5), data = women)
+print(summary(model_weight_5))
+lines(women$height, predict(model_weight_5), col=6)
+
+# preform anova on fitted models
+anova(model_weight_2, model_weight_3, model_weight_4, model_weight_5)
+```
+Looking at the fitted lines in the "polynomial regression" plot, the green (polynomial 2) and blue (polynomial 3) fit the data best. Considering that simpler models that have similar performance to more complex ones are preferred, the model `model_weight_2` is the best model to be selected. The results of anova show again that `model_weight_2` (polynomial 2) is the best fitting model.
+
+
+***
+
+# Clustering
+
+## 5. load and explore the milk dataset
+```{r}
+# import necessary libraries
+library(grid)
+library(lattice)
+library(modeltools)
+library(stats4)
+library(flexclust)
+
+library(car)
+
+# load dataset milk
+data(milk)
+
+help(milk)
+str(milk)
+head(milk)
+scatterplotMatrix(milk, smooth = FALSE, regLine = FALSE)
+```
+The dataset `milk` contains 25 records and 5 attributes. The records represent tree species and all attributes are stored as continuous numbers. Examining the scatterplot matrix we can see the correlations shown in table 1.
+
+\center _Table 1: Correlations between variables._ \center
+
+**variable 1**    | **variable 2**  | **correlation** |
+----------------- | --------------- | --------------- |
+`water`           | `protein`       | -               |
+`water`           | `fat`           | -               |
+`water`           | `lactose`       | +               |
+`water`           | `ash`           | -               |
+`protein`         | `fat`           | +               |
+`protein`         | `lactose`       | -               |
+`protein`         | `ash`           | +               |
+`fat`             | `lactose`       | -               |
+`fat`             | `ash`           | +               |
+`lactose`         | `ash`           | -               |
+
+
+## 6. data preperation
+```{r}
+# convert data from a data.frame to a matrix
+milk_matrix <- as.matrix(milk)
+# distance measure
+milk_dist <- dist(milk_matrix, method = "euclidean")
+
+# check classes of objects 
+print(class(milk))
+print(class(milk_matrix))
+print(class(milk_dist))
+```
+Table 2 shows the classes of the objects.
+
+\center _Table 2: Classes of the objects._ \center
+
+**object**    | **class**  |
+------------- | ---------- | 
+`milk`        | data.frame |
+`milk_matrix` | matrix     |
+`milk_dist`   | dist       |
+
+
+## 7. hierarchical clustering
+```{r}
+# hierarchical clustering
+hc1 <- hclust(milk_dist)
+# plot
+plot(hc1, main = "Cluster dendrogram of milk properties",
+      xlab = "Species", ylab = "Distance")
+```
+The default linkage method of the function `hclust` is "complete". The cluster hierarchical dendogram shows that the animals living in the sea (seal and dolphin) (not whale!) have very different milk properties (high distance) to the milk of land living animals. In the matrix scatterplot (*5. load and explore the milk dataset*) in the first column (`water`), they are most probably the outliers not far away from the rest of the data points. The land living animals (exept whale) can be further divided into at least three subgroups where there is a  clear distance between the subgroups.  
+
+
+## 8. cut tree
+```{r}
+# cut the tree to get 3 clusters
+table(cutree(hc1, k = 3))
+
+# cut the tree at height 10
+table(cutree(hc1, h = 10))
+```
+We get 3 clusters by using the function `cutree` with the argument "k = 3". Cutting the tree at height 10 results in 6 clusters.
+
+
+## 9. use two more distance measures and two more linkage methods
+```{r}
+# distance measure "manhattan"
+milk_dist <- dist(milk_matrix, method = "manhattan")
+hc1 <- hclust(milk_dist)
+plot(hc1, main = "Cluster dendrogram of milk properties (manhattan distance)",
+      xlab = "Species", ylab = "Distance")
+
+# distance measure "binary" "nominal"
+milk_dist <- dist(milk_matrix, method = "maximum")
+hc1 <- hclust(milk_dist)
+plot(hc1, main = "Cluster dendrogram of milk properties (maximum distance)",
+      xlab = "Species", ylab = "Distance")
+
+# set distance measure back to "euclidean"
+milk_dist <- dist(milk_matrix, method = "euclidean")
+hc1 <- hclust(milk_dist)
+
+# linkage method "average"
+hc1 <- hclust(milk_dist, method = "average")
+plot(hc1, main = "Cluster dendrogram of milk properties (average linkage)",
+      xlab = "Species", ylab = "Distance")
+
+# linkage method "centroid"
+hc1 <- hclust(milk_dist, method = "centroid")
+plot(hc1, main = "Cluster dendrogram of milk properties (centroid linkage)",
+      xlab = "Species", ylab = "Distance")
+
+```
+After calculating the dendrograms for the distances "manhattan" and "maximum" and the linkages "average" and "centroid" the absolute distances change, however relative distances between the species change just slightly. Most importantly the 4 main clusters as described in *7. hierarchical clustering* are basically the same and contain the same species.
+
+
+## 10. heatmap
+```{r}
+# heatmap
+
+breaks <-c(0, 1, 2, 5, 10, 20, 50, 100)
+heatmap(milk_matrix,
+hclustfun = function(x) hclust(x, "average"),
+distfun = function(x) dist(x, "manhattan"),
+scale = "none", breaks=breaks,
+col = heat.colors(7))
+legend(0,1, legend = c(breaks), fill = heat.colors(7),
+bg = "white")
+
+```
+
+
+## 11. k-means
+```{r}
+# calculate k-means
+km1 <- kmeans(milk_matrix, centers=4)
+
+# plot the result of the k-means algorithm
+pairs(milk_matrix, col = km1$cluster)
+```
+After trying different numbers of clusters "k", I would suggest 4 numbers of clusters for this dataset. Four clusters seem to capture best the groups in the dataset. The result is partly biased by the previous result of the hierarchical clustering. However, 2 clusters seem to less (it is just capturing the dolphin and the seal). The number of clusters between 3-4 seem to work fine it captures groups that have their center points in a certain distance form each other. More than 4 clusters are too many for this small dataset.
+ 
+
+## 12. bivariate regression
+```{r}
+# load dataset trees
+cl1 <- kcca(milk_matrix, k=4)
+
+# plot the result
+barplot(cl1)
+```
+The algorithm seems to have found:
+
+  * one cluster with milk having almost as much `water` content as content of `fat`
+  * one cluster with milk with high `water` content, however an clearly visible `fat` and `protein` content
+  * one cluster with milk having very high `water` content with low but similar content of `protein`, `fat` and `lactose`
+  * one cluster with milk having almost just `water` with some `lactose` content
+
+***
