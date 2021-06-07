@@ -1,6 +1,6 @@
 ---
 author: "Philipp Satlawa - h0640348"
-date: "24/05/2021"
+date: "27/05/2021"
 title: "Multivariate Statistics - Exercise 4"
 output:
   pdf_document: default
@@ -20,6 +20,8 @@ This document contains the answered questions of exercise 4 of the course "Multi
 ```{r}
 # import necessary libraries
 library(ISLR)
+library(cvTools)
+library(pls)
 
 # load data
 data(OJ)
@@ -36,139 +38,262 @@ OJ$STORE<-as.factor(OJ$STORE)
 OJ$SpecialCH<-as.factor(OJ$SpecialCH)
 OJ$SpecialMM<-as.factor(OJ$SpecialMM)
 ```
-The dataset `milk` contains 25 records and 5 attributes. The records represent tree species and all attributes are stored as continuous numbers.
-The variables `StoreID`, `STORE`, `SpecialCH` and `SpecialMM` are categorical, hence can be represented as factors.
-The variables `StoreID` and `STORE` contain both the Store id the only difference is that Store and are therefore redumdant.
+The dataset `OC` contains 1070 records and 18 attributes. The records represent purchases of orange juice for two brands (`CH` and `MM`). All except for two variables (`Purchase` and `Store7`) are *numerical*, however the variables `StoreID`, `STORE`, `SpecialCH` and `SpecialMM` are encoded as numerical but are in reality categorical. Hence, we change the representation of these variables from *numerical* to *factor*. Furthermore, some attribures seem to contain redundant information, such as `StoreID` and `STORE`.
 
 
 ## 2. split data into train and test set
 ```{r}
-# calulate means
+# set seed
+set.seed(3333)
 
+# create indices and shuffle randomly
+idx = sample(dim(OJ)[1])
 
+# set train split
+train_split = 0.75
+
+# split dataset in train and test
+train = OJ[idx[1:(dim(OJ)[1]*train_split)],]
+test = OJ[idx[((dim(OJ)[1]*train_split)+1):dim(OJ)[1]],]
+
+# print class proportions of train and test
+print(oj_prop <- table(OJ$Purchase))
+print(train_prop <- table(train$Purchase))
+print(test_prop <- table(test$Purchase))
+
+# calculate ratio CH/MM
+print(oj_prop["CH"]/oj_prop["MM"])
+print(train_prop["CH"]/train_prop["MM"])
+print(test_prop["CH"]/test_prop["MM"])
 ```
-The variables are directly comparable because they are expressed as percentages (same unit of measurement), hence we do not need to scale the data. Even though the data does not need any scaling, the data matrix has to be centered for computing the PCA.
+The class proportions of the train-set and test-set are balanced (although not the same, the CH/MM ratio is 1.57 in train versus 1.54 in test and 1.57 in the entire data set). An imbalance in the class-proportions of the two subsets can result in a model that performs worse than trained on a balanced class-proportions dataset. The imbalance of the classes in the subsets is directly linked to the prior probability, if the classifier takes the prior probability into account and the subsets are imbalanced the trained model is biased towards one class and the prediction is worse. In the worst case, we can have a split where one class (e.g. CH) is just in the training set and the other class (e.g. MM) just in the test set. This would result in a model that cannot predict class number two (e.g. MM) since there was no data in the training set. 
 
 
 ## 3. LDA
 ```{r}
-# PCA with milk data
-pca_milk <- prcomp(x = milk, center = TRUE, scale. = FALSE, retx = TRUE)
+# load package
+require(MASS)
 
-# loadings matrix
-pca_milk$rotation
+#LDA
+lda_model_cv <- lda(Purchase ~ ., data = train, CV = TRUE)
+
+# confusion matrix of the cross-validated LDA model
+(table(prediction = lda_model_cv$class, truth = train[, "Purchase"]))
 ```
-As we have 5 variables, PCA returns 5 principal components (PC). Examining the loadings matrix we can see that a particular PC describes the most variation for the variables with high absolute values. Therefore, the variables that influence most PC1 are `water` and `fat`. For PC2 this variables are especially `protein`, but also `fat`. In PC3 the most influencing variables are a mixture of `water`, `fat` and `lactose`. PC4 is shaped by `lactose` and PC5 is almost exclusively influenced by `ash`.
+While training the model we encounter collinearity of some variables. This means at least two variables are strongly correlated hence contain the same information and are therefore redundant. To obtain a better model it is advisable to remove these variables.
 
 
 ## 4. select variables for predicting 
 ```{r}
-# scores matrix
-pca_milk$x
+# plot time/location predictors
+pairs(OJ[,c("StoreID", "STORE", "Store7")])
+
+# plot price predictors
+pairs(OJ[,c("PriceCH", "SalePriceCH", "PriceDiff", "DiscCH", "PctDiscMM", 
+            "SpecialCH", "ListPriceDiff")])
+
+# clean data sets
+OJ_cl <- OJ[,c("Purchase", "WeekofPurchase", "StoreID", "PriceCH", "PriceMM", 
+               "DiscCH", "DiscMM", "LoyalCH")]
+train_cl = train[,c("Purchase", "WeekofPurchase", "StoreID", "PriceCH",
+                    "PriceMM", "DiscCH", "DiscMM", "LoyalCH")]
+test_cl = test[,c("Purchase", "WeekofPurchase", "StoreID", "PriceCH", 
+                  "PriceMM", "DiscCH", "DiscMM", "LoyalCH")]
 ```
-The PCA basically maps the data points to a different coordinate system (where the variance is maximized). The scores in this matrix show where the data points lie on the new axes. If we take for example the data point `HORSE` with the value *-15.7* in the column `PC1`, it means that this data point is mapped onto the value *-15.7* on the new principal component axis `PC1`.
+**Time/Location Predictors**
+
+ * In the subgroup *time/location* the variables `StoreID` and `STORE` are basically the same the only difference is the representation (coding). 
+ * The variable `Store7` is contained in the variables `StoreID` and `STORE`, hence it is redundant.
+
+**Price Predictors**
+
+There are several attributes with relationships the subgroup describing the *price* that are containing the same information.
+
+  * `SalePriceXX` = `PriceXX` - `DiscXX`
+  * `DiscXX` = `PriceXX` * `PctDiscXX`
+  * `PriceDiff` = `SalePriceMM` - `SalePriceCH`
+  * `ListPriceDiff` = `PriceMM` - `PriceCH`
+
+Since the variables can be explained through the above described relationships the two variables `PriceXX` and `DiscXX` contain all the necessary information.
+
+To conclude, many of the variables of the original dataset contain the same information, hence the following attributes are sufficient to train a model without loosing any information `WeekofPurchase`, `StoreID`, `PriceCH`, `PriceMM`, `DiscCH`, `DiscMM`, `LoyalCH`.
 
 
-## 5. LDA
+## 5. LDA on train set
 ```{r}
-# summary method
-summary(pca_milk)
+#LDA
+lda_model_cv <- lda(Purchase ~ ., data = train_cl, CV = TRUE)
+
+# confusion matrix of the cross-validated LDA model
+(cm_train <- table(prediction = lda_model_cv$class, truth = train_cl[, "Purchase"]))
+
+# total observations, correct and misclassified
+n <- dim(train_cl)[1]
+correct <- sum(diag(cm_train))
+mis <- n - correct
+
+# apparent error rate
+(APER <- mis/n)
 ```
-The first PC (`PC1`) explains 96.7% of the variance of the data. If we look at the second PC (`PC2`), we can see that `PC2` just explains 2.8% of the variance and the consecutive PCs (`PC3` to `PC5`) explain just a minimal fraction of the variance. Due to the high proportion of variance of `PC1`, it is sufficient to choose just this PC for further computation.
+By applying LDA on the cleaned train set we obtain an *apparent error rate* of 0.178 for the classifier.
 
 
-## 6. score plot and a loadings plot
+## 5. LDA on test set
 ```{r}
-library(shape)
-# score plot
-plot(pca_milk$x[, 1:2], pch = 19,
-xlab = "PC1", ylab = "PC2", main = "Score Plot")
-# loading plot
-plot(pca_milk$rotation[, 1:2], pch = 19,
-xlab = "PC1", ylab = "PC2", main = "Loading Plot")
-# Arrows (shape package required)
-Arrows(x0 = 0, y0 = 0, x1 = pca_milk$rotation[, 1],
-y1 = pca_milk$rotation[, 2], arr.adj = 1, col = "red")
-# show zero lines
-abline(h = 0, col = "grey")
-abline(v = 0, col = "grey")
-# variable names
-text(pca_milk$rotation[, 1:2], labels = rownames(pca_milk$rotation))
+#LDA
+lda_model <- lda(Purchase ~ ., data = train_cl, CV = FALSE)
+
+# predict test set cases
+preds_test <- predict(lda_model, newdata = test_cl)
+
+# confusion matrix of the final LDA model
+(cm_test <- table(predictions = preds_test$class, truth = test_cl[, "Purchase"]))
+
+# total observations, correct and misclassified
+n <- dim(test_cl)[1]
+correct <- sum(diag(cm_test))
+mis <- n - correct
+
+# apparent error rate
+(APER <- mis/n)
 ```
+After retraining the model on the cleaned train set we apply the cleaned test set on the final model and receive an *apparent error rate* of 0.176. This result is matching with the outcome of the previously trained model `lda_model_cv`.
 
-
-## 7. biplot
-```{r}
-# biplot
-biplot(pca_milk, main = "Biplot", cex = c(0.5,1), scale = 0)
-```
-The biplot is the combination of the score plot and the loadings plot. It shows on the one hand the variable loadings (red vectors) in the space of `PC1` and `PC2` and on the other hand the data records and maps them into the space of `PC1` and `PC2`. For example we can see that the vector `fat` points in the upper right corner, therefore the most right data points (`SEAL` and `DOLPHIN`) are also the ones with the highest fat content. Similarly we can interpret that the data point `RABBIT` should have the highest protein content because it is the lowest data point and the `protein` vector is pointing down.
-
-
-## 8. cluster data
-```{r}
-# calculate k-means
-km <- kmeans(as.matrix(milk), centers=4)
-
-# biplot
-biplot(pca_milk, main = "Biplot", cex = c(0.5,1), scale = 0, xlabs=km$cluster)
-```
 
 ***
 
-# PCA for Dimensionality Reduction
+# Regression
 
-## 9. load photo
+## 1. load data
 ```{r}
-# load package
-require(jpeg)
+# load data
+data(Boston)
 
-# load photo
-photo <- readJPEG("Foxe_Basin_Canada.jpg")
+# explore data
+help(Boston)
+head(Boston)
+str(Boston)
+summary(Boston)
 
-nrow(photo)
-ncol(photo)
+# missing values
+which(is.na(Boston))
 
-# dimensions / resolution
-dim(photo)
-
-# class of object photo
-class(photo)
-
-# create matrices for every channel
-r <- photo[,,1]
-g <- photo[,,2]
-b <- photo[,,3]
-
-# preform PCA on data
-r.pca <- prcomp(r, center = F)
-g.pca <- prcomp(g, center = F)
-b.pca <- prcomp(b, center = F)
-rgb.pca <- list(r.pca, g.pca, b.pca)
+# convert categorical variables to factors
+Boston$chas <- as.factor(Boston$chas)
+Boston$rad <- as.factor(Boston$rad)
 ```
-interpret results
+The dataset `Boston` contains 506 records and 14 attributes that represent the housing values in suburbs of Boston. The majority of variables are represented as continuous numbers, just the variables `chas` and `rad` are represented as discrete numbers (integers) because they are actually categorical variables. The attribute `rad` is additionally an ordinal variable.
 
 
-## 10. apply PCA compression on photo
+## 2. split data into train and test set
 ```{r}
+# set seed
+set.seed(3333)
 
-for (i in seq.int(3, round(nrow(photo)/5), length.out = 20)) {
-pca.img <- sapply(rgb.pca, function(j) {
-compressed.img <- j$x[,1:i] %*% t(j$rotation[,1:i])
-}, simplify = 'array')
-writeJPEG(pca.img, paste('PIC_', round(i,0), '_components.jpg', sep = ''),
-quality=1)
-}
+# create indices and shuffle randomly
+idx = sample(dim(Boston)[1])
+
+# set train split
+train_split = 2/3
+
+# split dataset in train and test
+train = Boston[idx[1:(dim(Boston)[1]*train_split)],]
+test = Boston[idx[((dim(Boston)[1]*train_split)+1):dim(Boston)[1]],]
+
+# print dimensions of train and test
+dim(train)
+dim(test)
+
+# print class proportions of train set
+print((mean(train$medv)))
+print((sd(train$medv)))
+# print class proportions of test set
+print((mean(test$medv)))
+print((sd(test$medv)))
+
 ```
-As expected the lower the PCs used the lower the quality of the image. With 3 PCs the image is not recognizable, however with just 12 PCs shapes are already recognizable although the image quality is very low. With 57 PCs the quality improved drastically however there is still a quality deficit. When using more than 100 PCs the quality difference is much harder recognizable and can be considerd satisfactory.
+By comparing the mean of the target variable `medv` in both the train and test set we get similar numbers 22.4 and 22.8 respectively, which indicates a good split between the train and test set (at least of the target variable). The higher standard deviation in the test set also makes sense due to the smaller number of records contained in the test set the standard deviation is expected to be higher compared to the train set.
+The model we want to create for predicting the house prices shall be as simple as possible, hence flexible for adapting to unknown data, however as complex as necessary due to the fact that we do not have the future data and the best guess is looking into the data of the past. Too complex models might fit the training data perfectly however they often perform poorly on unseen data (overfitting) therefore we hold out a part of our data (test set) to be able to validate the model.
 
 
-## 11. include photo
-Picture compressed with 3 numbers of principal components  
-![image using 12 PCs](PIC_3_components.jpg)
-\pagebreak
+## 3. simple regression model
+```{r}
+# linear model
+lm_simp <- lm(medv ~ rm, data = train)
 
-Picture compressed with 101 numbers of principal components  
-![some caption](PIC_101_components.jpg)
-  
+# scatterplot with regression line
+plot(train[c("rm", "medv")], col = rgb(0,0.2,1,0.4), pch = 20,
+      main = "Simple Linear Regression",
+      xlab = "Average number of rooms per dwelling",
+      ylab = "Median value of owner-occupied homes [$1000]")
+abline(lm_simp, lwd = 1, col = "red")
+```
+After calculating the simple regression model, we can see that there is a correlation between the two attributes `medv` and `rm`. Nonetheless, there are many data points that cannot be explained by just the linear relationship between `medv` and `rm`. In particular there are some outliers, that are high value homes with a small average number of rooms per dwelling and cannot be explained by this simple regression model.
+
+
+## 4. RMSE
+```{r}
+# predict train set
+preds_simp <- predict(lm_simp)
+# calculate RMSE on train set
+sqrt(mean((preds_simp - train[, "medv"])^2))
+
+# use cross validation on train set
+cvFit(lm_simp, data = train, y = train$medv, K = 10, seed = 3333)
+```
+The results show a slightly higher RMSE 6.87 calculated on a 10-fold cross validated train set compared to the RMSE of 6.83 obtained on the train set without cross validation.
+
+
+## 5. Partial Least Squares (PLS)
+```{r}
+# make this example reproducible
+set.seed(3333)
+# PLS on train set with 10-fold CV
+pls_model <- plsr(medv ~ ., data = train, ncomp = 10, validation = "CV")
+# print summary
+summary(pls_model)
+```
+From the results of the PLS without scaling the data, we can deduct that the accuracy of the model increases with the number of components used. Considering the steady increases we would use at lest 7 components that can explain 60.3 % of `medv`s variance. Certainly, it is also possible to to use 10 components to reduce the RMSE by ruffly 0.6 and get a model that can explain 66.7% of `medv`s variance.
+
+
+## 6. prediction error on the test data
+```{r}
+# Performance on test set for 7-component PLS model
+preds_pls_test <- predict(pls_model, newdata = test, ncomp = 7)
+
+# calculate test RMSE
+sqrt(mean((preds_pls_test - test[, "medv"])^2))
+```
+The PLS model with 7 components achieves a RMSE of 5.25 on the test data.
+
+
+## 7. scale the data and apply Partial Least Squares (PLS)
+```{r}
+# make this example reproducible
+set.seed(3333)
+# PLS on train set with 10-fold CV
+pls_model_scaled <- plsr(medv ~ ., data = train, ncomp = 10, validation = "CV", 
+                         scale = TRUE)
+summary(pls_model_scaled)
+
+# Performance on test set for scaled 4-component PLS model
+preds_pls_scaled_test <- predict(pls_model_scaled, newdata = test, ncomp = 5)
+# calculate test RMSE
+sqrt(mean((preds_pls_scaled_test - test[, "medv"])^2))
+```
+Training the model on scaled data increased the models performance and reduced the number of essential components to 4. With 4 components we are able to explain 68.3 % of `medv`s variance and obtain a RMSE 5.31 on the train set. 
+If we now compare the non-scaled PLS-model with the scaled PLS-model, we can can clearly see the superiority of the scaled PLS-model, where we can obtain with 4 components a RMSE of 4.37 on the test set, compared to a RMSE of 5.25 the test set of the non-scaled PLS-model.
+
+
+## 8. Visualize performance
+```{r fig, fig.height = 5, fig.width = 5, fig.align = "center"}
+# Plot results
+plot(test[, "medv"], preds_pls_scaled_test, col = rgb(0,0.2,1,0.4), pch = 20,
+      xlim = c(0,55), ylim = c(0,55),
+      main = "Measured versus Predicted Values",
+      xlab = "Measured Median Value [$1000]", ylab = "Predicted Median Value [$1000]")
+#abline(lm_simp, lwd = 1, col = "red")
+```
+In the plot we can see the model performing quite well until the median home value of \$30000. Homes with a measured median home value above \$30000 are being undervalued by the model. Thereby undervaluing the homes with the highest measured median home value (above \$40000) the most. However, for most cases the model predicts good estimates and can be deployed with the constraint that more valuable homes should be measured.
+
 ***
